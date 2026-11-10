@@ -215,6 +215,9 @@ button:focus-visible{outline:3px solid #ffd866;outline-offset:2px}
 #pauseBtn[hidden]{display:none}
 #pauseOv,#byeOv{z-index:45;background:rgba(20,12,4,.55)}
 #pauseOv .card,#byeOv .card{display:flex;flex-direction:column;gap:8px;min-width:min(260px,calc(80*var(--vw)))}
+.kpress{transform:translateY(2px) scale(.95)!important;filter:brightness(1.15)}
+.kbad{animation:kbad .3s}
+@keyframes kbad{25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
 </style>
 </head>
 <body>
@@ -989,7 +992,7 @@ $("#mHelp").addEventListener("click",()=>{ ac(); menuPanel("Hogyan játssz?",`<u
 <li><b>2. Vizsga:</b> válaszd ki a magyar szó angol párját. 3 hiba után vissza kell menned a kiképzésre.</li>
 <li><b>3. Csata:</b> húzd hátra az ujjad és engedd el a célzáshoz, majd rakd ki a szót angolul, mielőtt leég a kanóc. Minél gyorsabb vagy, annál nagyobbat sebzel.</li>
 <li><b>Védekezés:</b> ha megáll az ellenség nyila, válaszd ki a fordítását, mielőtt felrobban. Az ellenség az elhibázott szavaidat lövi rád; amit helyesen hárítasz, az lekerül a listájáról.</li>
-<li><b>Tipp:</b> a király ×2, a hordó ×1,8 sebzést ér. Egy szint 3 találattól leomlik.</li></ul>`); });
+<li><b>Tipp:</b> a király ×2, a hordó ×1,8 sebzést ér. Egy szint 3 találattól leomlik.</li><li><b>Billentyűzet:</b> Enter/Szóköz indít és lő, nyilakkal célzol (fel-le irány, jobbra-balra erő), betűkkel rakod ki a szót, Backspace visszavon, 1–3 választ, Esc szünet. Kiképzésben: ↓/↑ lapoz, Szóköz kiejti, H felfedi, → tovább.</li></ul>`); });
 $("#mpX").addEventListener("click",()=>{ $("#mPanel").hidden=true; });
 $("#mLvl").addEventListener("click",e=>{ const b=e.target.closest("[data-l]"); if(!b) return; ac(); LEVEL=b.dataset.l; try{ localStorage.setItem("szoostrom_szint",LEVEL); }catch(e){} cloudSave(); playSnd("hit",.5,1.3); showMenu(); });
 $("#mSnd").addEventListener("click",e=>{ e.stopPropagation(); setMute(!MUTE); if(!MUTE){ ac(); playSnd("hit",.6); } });
@@ -1123,6 +1126,52 @@ $("#pMenu").onclick=()=>{ abandonRound(); showMenu(); };
 $("#pQuit").onclick=()=>{ abandonRound(); showMenu(); try{ window.close(); }catch(e){} setTimeout(()=>{ $("#byeOv").hidden=false; },150); };
 $("#byeBack").onclick=()=>{ $("#byeOv").hidden=true; };
 document.addEventListener("visibilitychange",()=>{ if(document.hidden&&canPause()) pauseGame(); });
+
+/* ---------- billentyűzet ---------- */
+const vis=q=>{ const e=$(q); return e&&!e.hidden; };
+let KAIM=null;   // billentyűs célzás: {ang,pow}
+function kAimApply(){ const G=gunPos(ME()); if(!G) return; const s=sc(), L=KAIM.pow*170*s; aim={sx:G.x,sy:G.y,x:G.x-Math.cos(KAIM.ang)*L,y:G.y-Math.sin(KAIM.ang)*L,key:true}; }
+function kAimStart(){ if(fuse){ aimLeft=Math.max(.3,fuse.len-(performance.now()-fuse.start)/1000); stopFuse(); } KAIM=KAIM||{ang:-.62,pow:.72}; kAimApply(); }
+function nth(sel,k){ const b=document.querySelectorAll(sel)[k]; if(b){ b.click(); return true; } return false; }
+addEventListener("keydown",e=>{ if(e.metaKey||e.ctrlKey||e.altKey) return; const k=e.key, K=k.length===1?k.toLowerCase():k;
+  // szünet
+  if(K==="Escape"){ if(vis("#albV")){ $("#albX").click(); return; } if(vis("#mPanel")){ $("#mpX").click(); return; } if(PAUSED) resumeGame(); else pauseGame(); e.preventDefault(); return; }
+  if(PAUSED){ if(K==="Enter"||K===" "){ resumeGame(); e.preventDefault(); } return; }
+  if(vis("#byeOv")){ if(K==="Enter") $("#byeBack").click(); return; }
+  if(vis("#albV")||vis("#mPanel")){ if(K==="Enter"||K===" "){ vis("#albV")?$("#albX").click():$("#mpX").click(); e.preventDefault(); } return; }
+  // főmenü
+  if(vis("#menu")){ ac(); if(K==="Enter"||K===" "){ $("#mStart").click(); e.preventDefault(); }
+    else if(K==="g") $("#mQuick").click(); else if(K==="s") $("#mWords").click(); else if(K==="m") $("#mAlbum").click(); else if(K==="h") $("#mHelp").click();
+    else if(K==="ArrowLeft"||K==="ArrowRight"){ const L=LEVELS.map(x=>x[0]), i=L.indexOf(LEVEL), j=(i+(K==="ArrowRight"?1:-1)+L.length)%L.length; document.querySelector(`#mLvl [data-l="${L[j]}"]`).click(); }
+    return; }
+  // táblák
+  if(vis("#bi")){ if(K==="Enter"||K===" "){ $("#bi").dispatchEvent(new PointerEvent("pointerdown",{bubbles:true})); e.preventDefault(); } return; }
+  if(vis("#ov")){ if(K==="Enter"||K===" "){ ac(); $("#ovB").click(); e.preventDefault(); } else if(K==="Backspace"&&vis("#ovM")) $("#ovM").click(); return; }
+  // 1. fázis
+  if(vis("#p1")&&state==="train"){ ac();
+    if(K==="ArrowDown"){ p1move(1); e.preventDefault(); }
+    else if(K==="ArrowUp"){ p1move(-1); e.preventDefault(); }
+    else if(K==="ArrowRight"||K==="Enter"){ p1toP2(); e.preventDefault(); }
+    else if(K===" "){ const all=$("#pairbox").querySelectorAll("[data-say]"), b=all[all.length-1]; if(b){ knock(); speakEn(b.dataset.say); } e.preventDefault(); }
+    else if(K==="h"){ const all=$("#pairbox").querySelectorAll(".arw.hu"), b=all[all.length-1]; if(b) revealHu(b); }
+    return; }
+  // 2. fázis
+  if(vis("#p2")){ if(K>="1"&&K<="3"){ ac(); nth("#p2opts [data-o]",+K-1); } return; }
+  // csata: védekezés
+  if(vis("#opts")&&eshot&&eshot.paused){ if(K>="1"&&K<="3"){ nth("#opts [data-o]",+K-1); e.preventDefault(); } return; }
+  // csata: célzás
+  if(state==="aim"){ ac();
+    if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(K)){ if(!aim||!aim.key) kAimStart();
+      if(K==="ArrowUp") KAIM.ang=clamp(KAIM.ang-.06,-1.45,.6); if(K==="ArrowDown") KAIM.ang=clamp(KAIM.ang+.06,-1.45,.6);
+      if(K==="ArrowRight") KAIM.pow=clamp(KAIM.pow+.04,.15,1); if(K==="ArrowLeft") KAIM.pow=clamp(KAIM.pow-.04,.15,1); kAimApply(); e.preventDefault(); }
+    else if(K===" "||K==="Enter"){ if(!aim||!aim.key) kAimStart(); const v=aimVec(); state="quiz"; aim.locked=v; startQuiz(); e.preventDefault(); }
+    return; }
+  // csata: szó kirakása
+  if(state==="quiz"){
+    if(K==="Backspace"){ $("#undo").click(); e.preventDefault(); return; }
+    if(/^[a-z]$/.test(K)){ const i=tiles.findIndex(t=>t.c===K); const b=i>=0&&document.querySelector(`[data-t="${i}"]`); if(b){ b.click(); b.classList.add("kpress"); setTimeout(()=>b.classList.remove("kpress"),120); } else { const tl=$("#tiles"); if(tl){ tl.classList.remove("kbad"); void tl.offsetWidth; tl.classList.add("kbad"); } } e.preventDefault(); return; }
+    if(K==="Enter"&&cur&&e.shiftKey===false){ return; } }
+});
 function showOv(t,p,b,prize){ stopFuse(); showPrize(prize===undefined?-1:prize); $("#reveal").hidden=true; $("#weap").hidden=true; state="end"; $("#ovT").textContent=t; $("#ovP").textContent=p; $("#ovB").textContent=b; $("#ov").hidden=false; $("#panel").classList.add("off"); say(""); }
 $("#ovB").onclick=()=>{ ac(); $("#ov").hidden=true; newTraining(); };
 let QUICK=false;
